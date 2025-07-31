@@ -1,0 +1,2819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MySugarPal - Your Complete Sugar Truth Guide</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f8fffe 0%, #e8f5f3 100%);
+            color: #212529;
+            min-height: 100vh;
+        // Weight tracking functions
+        function logWeightReading() {
+            const weight = parseFloat(document.getElementById('weightValue').value);
+            const unit = document.getElementById('weightUnit').value;
+            const date = document.getElementById('weightDate').value;
+            const time = document.getElementById('weightTime').value;
+            const type = document.getElementById('weightType').value;
+            const notes = document.getElementById('weightNotes').value;
+            
+            if (!weight || weight < 50 || weight > 500) {
+                showNotification('Please enter a valid weight (50-500)', 'error');
+                return;
+            }
+            
+            // Convert to consistent unit (lbs) for calculations
+            const weightInLbs = unit === 'kg' ? weight * 2.20462 : weight;
+            
+            const entry = {
+                id: Date.now(),
+                weight: weight,
+                weightInLbs: weightInLbs,
+                unit: unit,
+                date: date,
+                time: time,
+                type: type,
+                notes: notes
+            };
+            
+            weightReadings.unshift(entry);
+            updateWeightHistory();
+            updateInsights();
+            showNotification(`⚖️ Weight logged: ${weight} ${unit}`);
+            
+            // Clear form
+            document.getElementById('weightValue').value = '';
+            document.getElementById('weightNotes').value = '';
+        }
+
+        function updateWeightHistory() {
+            const historyDiv = document.getElementById('weightHistory');
+            const statsDiv = document.getElementById('weightStats');
+            const insightsDiv = document.getElementById('weightInsights');
+            
+            if (weightReadings.length === 0) {
+                historyDiv.innerHTML = `
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Start tracking to see your weight patterns and sugar correlations!</p>
+                `;
+                if (statsDiv) statsDiv.style.display = 'none';
+                if (insightsDiv) insightsDiv.style.display = 'none';
+                return;
+            }
+            
+            // Show stats if we have readings
+            if (statsDiv) statsDiv.style.display = 'block';
+            if (insightsDiv) insightsDiv.style.display = 'block';
+            
+            // Calculate statistics
+            const currentReading = weightReadings[0];
+            const currentWeight = `${currentReading.weight} ${currentReading.unit}`;
+            
+            // Calculate 7-day change
+            let weekAgoWeight = null;
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            for (let reading of weightReadings) {
+                const readingDate = new Date(reading.date);
+                if (readingDate <= sevenDaysAgo) {
+                    weekAgoWeight = reading;
+                    break;
+                }
+            }
+            
+            let weightChange = '--';
+            let trend = '--';
+            
+            if (weekAgoWeight && weightReadings.length >= 2) {
+                const change = currentReading.weightInLbs - weekAgoWeight.weightInLbs;
+                const changeDisplay = currentReading.unit === 'kg' ? (change / 2.20462).toFixed(1) : change.toFixed(1);
+                weightChange = `${change >= 0 ? '+' : ''}${changeDisplay} ${currentReading.unit}`;
+                
+                if (Math.abs(change) < 1) {
+                    trend = '➡️ Stable';
+                } else if (change > 0) {
+                    trend = '📈 Increasing';
+                } else {
+                    trend = '📉 Decreasing';
+                }
+            }
+            
+            // Update stats display safely
+            const currentWeightEl = document.getElementById('currentWeight');
+            const weightChangeEl = document.getElementById('weightChange');
+            const weightTrendEl = document.getElementById('weightTrend');
+            
+            if (currentWeightEl) currentWeightEl.textContent = currentWeight;
+            if (weightChangeEl) weightChangeEl.textContent = weightChange;
+            if (weightTrendEl) weightTrendEl.textContent = trend;
+            
+            // Update history list
+            let html = '';
+            weightReadings.slice(0, 10).forEach((reading, index) => {
+                const typeTexts = {
+                    'morning': '🌅 Morning',
+                    'evening': '🌙 Evening',
+                    'pre_meal': '🍽️ Before Meal',
+                    'post_meal': '🍽️ After Meal',
+                    'weekly': '📊 Weekly',
+                    'random': '🔀 Random'
+                };
+                
+                // Calculate change from previous reading
+                let changeText = '';
+                if (index < weightReadings.length - 1) {
+                    const prevReading = weightReadings[index + 1];
+                    const change = reading.weightInLbs - prevReading.weightInLbs;
+                    if (Math.abs(change) >= 0.1) {
+                        const changeDisplay = reading.unit === 'kg' ? (change / 2.20462).toFixed(1) : change.toFixed(1);
+                        const changeColor = change > 0 ? '#f59e0b' : change < 0 ? '#22c55e' : '#6c757d';
+                        changeText = `<span style="color: ${changeColor}; font-weight: bold;">(${change >= 0 ? '+' : ''}${changeDisplay})</span>`;
+                    }
+                }
+                
+                html += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e9ecef;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600;">⚖️ ${reading.weight} ${reading.unit} ${changeText}</div>
+                            <div style="font-size: 0.8em; opacity: 0.7;">
+                                ${typeTexts[reading.type] || reading.type} • ${reading.date} ${reading.time}
+                                ${reading.notes ? ` • "${reading.notes}"` : ''}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="background: #16a34a; color: white; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.9em;">
+                                LOGGED
+                            </div>
+                            <button onclick="deleteWeightReading(${index})" class="delete-btn" title="Delete">✕</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            historyDiv.innerHTML = html;
+            
+            // Update weight insights
+            updateWeightInsights();
+        }
+
+        function deleteWeightReading(index) {
+            if (index >= 0 && index < weightReadings.length) {
+                const reading = weightReadings[index];
+                if (confirm(`Delete ${reading.weight} ${reading.unit} reading?`)) {
+                    weightReadings.splice(index, 1);
+                    updateWeightHistory();
+                    updateInsights();
+                    showNotification('Weight reading deleted');
+                }
+            }
+        }
+
+        function updateWeightInsights() {
+            const insightDiv = document.getElementById('weightInsightContent');
+            
+            if (!insightDiv || weightReadings.length < 2) {
+                if (insightDiv) {
+                    insightDiv.innerHTML = `
+                        <p style="text-align: center; opacity: 0.7; padding: 20px;">Track more weights to see correlations with sugar intake!</p>
+                    `;
+                }
+                return;
+            }
+            
+            // Calculate correlations and insights
+            const recentWeightChange = weightReadings.length >= 2 ? 
+                weightReadings[0].weightInLbs - weightReadings[1].weightInLbs : 0;
+            
+            // Get today's sugar intake
+            const todaySugar = todayLog.reduce((sum, entry) => sum + entry.sugar, 0);
+            
+            let insights = [];
+            
+            // Weight trend insights
+            if (Math.abs(recentWeightChange) >= 1) {
+                const direction = recentWeightChange > 0 ? 'increased' : 'decreased';
+                const amount = Math.abs(recentWeightChange).toFixed(1);
+                const unit = weightReadings[0].unit === 'kg' ? (amount / 2.20462).toFixed(1) + ' kg' : amount + ' lbs';
+                
+                insights.push({
+                    icon: recentWeightChange > 0 ? '📈' : '📉',
+                    title: `Weight ${direction.charAt(0).toUpperCase() + direction.slice(1)}`,
+                    text: `Your weight has ${direction} by ${unit} since last measurement.`,
+                    type: recentWeightChange > 0 ? 'warning' : 'positive'
+                });
+            }
+            
+            // Sugar correlation insights
+            if (todaySugar > 25 && recentWeightChange > 0) {
+                insights.push({
+                    icon: '🍯',
+                    title: 'Sugar & Weight Correlation',
+                    text: `High sugar intake (${todaySugar}g) may be contributing to weight changes. Consider reducing processed foods.`,
+                    type: 'warning'
+                });
+            } else if (todaySugar <= 15 && recentWeightChange <= 0) {
+                insights.push({
+                    icon: '🌟',
+                    title: 'Positive Progress',
+                    text: `Low sugar intake (${todaySugar}g) aligns with stable/decreasing weight. Keep up the great work!`,
+                    type: 'positive'
+                });
+            }
+            
+            // Consistency insights
+            if (weightReadings.length >= 7) {
+                insights.push({
+                    icon: '📊',
+                    title: 'Consistent Tracking',
+                    text: `Great job tracking regularly! Consistent monitoring helps identify patterns between sugar intake and weight changes.`,
+                    type: 'positive'
+                });
+            }
+            
+            let html = '';
+            if (insights.length === 0) {
+                html = `
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Track more data to unlock weight and sugar correlations!</p>
+                `;
+            } else {
+                insights.forEach(insight => {
+                    const bgColor = insight.type === 'positive' ? 'rgba(22, 163, 74, 0.1)' :
+                                   insight.type === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(34, 197, 94, 0.1)';
+                    const borderColor = insight.type === 'positive' ? '#16a34a' :
+                                       insight.type === 'warning' ? '#f59e0b' : '#22c55e';
+                    
+                    html += `
+                        <div style="background: ${bgColor}; border-left: 4px solid ${borderColor}; padding: 15px; margin: 15px 0; border-radius: 8px;">
+                            <h4 style="margin: 0 0 8px 0; color: ${borderColor};">${insight.icon} ${insight.title}</h4>
+                            <p style="margin: 0; font-size: 0.9em;">${insight.text}</p>
+                        </div>
+                    `;
+                });
+            }
+            
+            insightDiv.innerHTML = html;
+        }
+
+        // Date/Time utility functions
+            const weight = parseFloat(document.getElementById('weightValue').value);
+            const unit = document.getElementById('weightUnit').value;
+            const date = document.getElementById('weightDate').value;
+            const time = document.getElementById('weightTime').value;
+            const type = document.getElementById('weightType').value;
+            const notes = document.getElementById('weightNotes').value;
+            
+            if (!weight || weight < 50 || weight > 500) {
+                showNotification('Please enter a valid weight (50-500)', 'error');
+                return;
+            }
+            
+            // Convert to consistent unit (lbs) for calculations
+            const weightInLbs = unit === 'kg' ? weight * 2.20462 : weight;
+            
+            const category = getWeightCategory(weightInLbs);
+            const entry = {
+                id: Date.now(),
+                weight: weight,
+                weightInLbs: weightInLbs,
+                unit: unit,
+                date: date,
+                time: time,
+                type: type,
+                notes: notes,
+                category: category
+            };
+            
+            weightReadings.unshift(entry);
+            updateWeightHistory();
+            updateInsights();
+            showNotification(`⚖️ Weight logged: ${weight} ${unit}`);
+            
+            // Clear form
+            document.getElementById('weightValue').value = '';
+            document.getElementById('weightNotes').value = '';
+        }
+
+        function getWeightCategory(weightInLbs) {
+            // This is a simple categorization - in a real app, you'd want BMI calculation
+            // For now, we'll focus on weight trends rather than absolute categories
+            return 'tracked';
+        }
+
+        function updateWeightHistory() {
+            const historyDiv = document.getElementById('weightHistory');
+            const statsDiv = document.getElementById('weightStats');
+            const insightsDiv = document.getElementById('weightInsights');
+            
+            if (weightReadings.length === 0) {
+                historyDiv.innerHTML = `
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Start tracking to see your weight patterns and sugar correlations!</p>
+                `;
+                statsDiv.style.display = 'none';
+                insightsDiv.style.display = 'none';
+                return;
+            }
+            
+            // Show stats if we have readings
+            statsDiv.style.display = 'block';
+            insightsDiv.style.display = 'block';
+            
+            // Calculate statistics
+            const currentReading = weightReadings[0];
+            const currentWeight = `${currentReading.weight} ${currentReading.unit}`;
+            
+            // Calculate 7-day change
+            let weekAgoWeight = null;
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            for (let reading of weightReadings) {
+                const readingDate = new Date(reading.date);
+                if (readingDate <= sevenDaysAgo) {
+                    weekAgoWeight = reading;
+                    break;
+                }
+            }
+            
+            let weightChange = '--';
+            let trend = '--';
+            
+            if (weekAgoWeight && weightReadings.length >= 2) {
+                const change = currentReading.weightInLbs - weekAgoWeight.weightInLbs;
+                const changeDisplay = currentReading.unit === 'kg' ? (change / 2.20462).toFixed(1) : change.toFixed(1);
+                weightChange = `${change >= 0 ? '+' : ''}${changeDisplay} ${currentReading.unit}`;
+                
+                if (Math.abs(change) < 1) {
+                    trend = '➡️ Stable';
+                } else if (change > 0) {
+                    trend = '📈 Increasing';
+                } else {
+                    trend = '📉 Decreasing';
+                }
+            }
+            
+            // Update stats display
+            document.getElementById('currentWeight').textContent = currentWeight;
+            document.getElementById('weightChange').textContent = weightChange;
+            document.getElementById('weightTrend').textContent = trend;
+            
+            // Update history list
+            let html = '';
+            weightReadings.slice(0, 10).forEach((reading, index) => {
+                const typeTexts = {
+                    'morning': '🌅 Morning',
+                    'evening': '🌙 Evening',
+                    'pre_meal': '🍽️ Before Meal',
+                    'post_meal': '🍽️ After Meal',
+                    'weekly': '📊 Weekly',
+                    'random': '🔀 Random'
+                };
+                
+                // Calculate change from previous reading
+                let changeText = '';
+                if (index < weightReadings.length - 1) {
+                    const prevReading = weightReadings[index + 1];
+                    const change = reading.weightInLbs - prevReading.weightInLbs;
+                    if (Math.abs(change) >= 0.1) {
+                        const changeDisplay = reading.unit === 'kg' ? (change / 2.20462).toFixed(1) : change.toFixed(1);
+                        const changeColor = change > 0 ? '#f59e0b' : change < 0 ? '#22c55e' : '#6c757d';
+                        changeText = `<span style="color: ${changeColor}; font-weight: bold;">(${change >= 0 ? '+' : ''}${changeDisplay})</span>`;
+                    }
+                }
+                
+                html += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e9ecef;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600;">⚖️ ${reading.weight} ${reading.unit} ${changeText}</div>
+                            <div style="font-size: 0.8em; opacity: 0.7;">
+                                ${typeTexts[reading.type] || reading.type} • ${reading.date} ${reading.time}
+                                ${reading.notes ? ` • "${reading.notes}"` : ''}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="background: #16a34a; color: white; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.9em;">
+                                LOGGED
+                            </div>
+                            <button onclick="deleteWeightReading(${index})" class="delete-btn" title="Delete">✕</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            historyDiv.innerHTML = html;
+            
+            // Update weight insights
+            updateWeightInsights();
+        }
+
+        function deleteWeightReading(index) {
+            if (index >= 0 && index < weightReadings.length) {
+                const reading = weightReadings[index];
+                if (confirm(`Delete ${reading.weight} ${reading.unit} reading?`)) {
+                    weightReadings.splice(index, 1);
+                    updateWeightHistory();
+                    updateInsights();
+                    showNotification('Weight reading deleted');
+                }
+            }
+        }
+
+        function updateWeightInsights() {
+            const insightDiv = document.getElementById('weightInsightContent');
+            
+            if (weightReadings.length < 2) {
+                insightDiv.innerHTML = `
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Track more weights to see correlations with sugar intake!</p>
+                `;
+                return;
+            }
+            
+            // Calculate correlations and insights
+            const recentWeightChange = weightReadings.length >= 2 ? 
+                weightReadings[0].weightInLbs - weightReadings[1].weightInLbs : 0;
+            
+            // Get today's sugar intake
+            const todaySugar = todayLog.reduce((sum, entry) => sum + entry.sugar, 0);
+            
+            let insights = [];
+            
+            // Weight trend insights
+            if (Math.abs(recentWeightChange) >= 1) {
+                const direction = recentWeightChange > 0 ? 'increased' : 'decreased';
+                const amount = Math.abs(recentWeightChange).toFixed(1);
+                const unit = weightReadings[0].unit === 'kg' ? (amount / 2.20462).toFixed(1) + ' kg' : amount + ' lbs';
+                
+                insights.push({
+                    icon: recentWeightChange > 0 ? '📈' : '📉',
+                    title: `Weight ${direction.charAt(0).toUpperCase() + direction.slice(1)}`,
+                    text: `Your weight has ${direction} by ${unit} since last measurement.`,
+                    type: recentWeightChange > 0 ? 'warning' : 'positive'
+                });
+            }
+            
+            // Sugar correlation insights
+            if (todaySugar > 25 && recentWeightChange > 0) {
+                insights.push({
+                    icon: '🍯',
+                    title: 'Sugar & Weight Correlation',
+                    text: `High sugar intake (${todaySugar}g) may be contributing to weight changes. Consider reducing processed foods.`,
+                    type: 'warning'
+                });
+            } else if (todaySugar <= 15 && recentWeightChange <= 0) {
+                insights.push({
+                    icon: '🌟',
+                    title: 'Positive Progress',
+                    text: `Low sugar intake (${todaySugar}g) aligns with stable/decreasing weight. Keep up the great work!`,
+                    type: 'positive'
+                });
+            }
+            
+            // Consistency insights
+            if (weightReadings.length >= 7) {
+                insights.push({
+                    icon: '📊',
+                    title: 'Consistent Tracking',
+                    text: `Great job tracking regularly! Consistent monitoring helps identify patterns between sugar intake and weight changes.`,
+                    type: 'positive'
+                });
+            }
+            
+            let html = '';
+            if (insights.length === 0) {
+                html = `
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Track more data to unlock weight and sugar correlations!</p>
+                `;
+            } else {
+                insights.forEach(insight => {
+                    const bgColor = insight.type === 'positive' ? 'rgba(22, 163, 74, 0.1)' :
+                                   insight.type === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(34, 197, 94, 0.1)';
+                    const borderColor = insight.type === 'positive' ? '#16a34a' :
+                                       insight.type === 'warning' ? '#f59e0b' : '#22c55e';
+                    
+                    html += `
+                        <div style="background: ${bgColor}; border-left: 4px solid ${borderColor}; padding: 15px; margin: 15px 0; border-radius: 8px;">
+                            <h4 style="margin: 0 0 8px 0; color: ${borderColor};">${insight.icon} ${insight.title}</h4>
+                            <p style="margin: 0; font-size: 0.9em;">${insight.text}</p>
+                        </div>
+                    `;
+                });
+            }
+            
+            insightDiv.innerHTML = html;
+        }
+
+        // Blood glucose functions
+        
+        .header {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(34, 197, 94, 0.3);
+        }
+        
+        .header h1 { 
+            font-size: 2.5em; 
+            font-weight: 800; 
+            color: #fff; 
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        .header p { 
+            font-size: 1.1em; 
+            color: #f0fdf4; 
+            font-weight: 500; 
+        }
+        
+        .nav {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            display: flex;
+            justify-content: space-around;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+            backdrop-filter: blur(10px);
+        }
+        
+        .nav-item {
+            background: none;
+            border: none;
+            color: #495057;
+            font-size: 12px;
+            padding: 8px 12px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        
+        .nav-item.active {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+            transform: scale(1.05);
+        }
+        
+        .nav-item:hover {
+            background: rgba(34, 197, 94, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .content { 
+            padding: 20px; 
+            max-width: 500px; 
+            margin: 0 auto; 
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        .screen { 
+            display: none; 
+            animation: slideIn 0.3s ease-out;
+        }
+        .screen.active { display: block; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .card {
+            background: #ffffff;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card h3 { 
+            color: #16a34a; 
+            margin-bottom: 15px; 
+            font-size: 1.3em; 
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .sugar-display {
+            text-align: center;
+            padding: 30px;
+            background: rgba(34, 197, 94, 0.05);
+            border-radius: 20px;
+            margin: 20px 0;
+            border: 2px solid rgba(34, 197, 94, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .sugar-display::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(34, 197, 94, 0.05) 0%, transparent 70%);
+            animation: pulse 3s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+        
+        .sugar-score { 
+            font-size: 3em; 
+            font-weight: 900; 
+            margin: 10px 0;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .zone-excellent { color: #16a34a; }
+        .zone-good { color: #22c55e; }
+        .zone-moderate { color: #f59e0b; }
+        .zone-high { color: #dc2626; }
+        
+        .zone-indicator {
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: 700;
+            font-size: 1.1em;
+            margin: 10px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .zone-indicator.excellent { 
+            background: rgba(22, 163, 74, 0.1); 
+            border: 2px solid #16a34a; 
+            color: #16a34a; 
+        }
+        .zone-indicator.good { 
+            background: rgba(34, 197, 94, 0.1); 
+            border: 2px solid #22c55e; 
+            color: #22c55e; 
+        }
+        .zone-indicator.moderate { 
+            background: rgba(245, 158, 11, 0.1); 
+            border: 2px solid #f59e0b; 
+            color: #f59e0b; 
+        }
+        .zone-indicator.high { 
+            background: rgba(220, 38, 38, 0.1); 
+            border: 2px solid #dc2626; 
+            color: #dc2626; 
+        }
+        
+        .form-group { margin-bottom: 20px; }
+        .form-group label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-weight: 600; 
+            color: #16a34a; 
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid rgba(34, 197, 94, 0.3);
+            border-radius: 12px;
+            background: #ffffff;
+            color: #212529;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .form-group input:focus, .form-group select:focus { 
+            outline: none; 
+            border-color: #22c55e; 
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1); 
+            transform: scale(1.02);
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            color: #fff;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn:hover::before {
+            left: 100%;
+        }
+        
+        .btn:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 8px 25px rgba(34, 197, 94, 0.3); 
+        }
+        
+        .btn-secondary { 
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%); 
+        }
+        
+        .food-results { 
+            max-height: 400px; 
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        
+        .food-result {
+            background: rgba(34, 197, 94, 0.05);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .food-result::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(34, 197, 94, 0.1), transparent);
+            transition: left 0.3s;
+        }
+        
+        .food-result:hover::before {
+            left: 100%;
+        }
+        
+        .food-result:hover { 
+            background: rgba(34, 197, 94, 0.1); 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.2);
+        }
+        
+        .food-result.selected { 
+            background: rgba(34, 197, 94, 0.15); 
+            border-color: #22c55e; 
+            border-width: 2px; 
+        }
+        
+        .food-name { 
+            font-weight: 700; 
+            font-size: 1.1em; 
+            color: #212529; 
+            position: relative;
+            z-index: 1;
+        }
+        
+        .food-info { 
+            font-size: 0.9em; 
+            opacity: 0.8; 
+            color: #495057; 
+            margin-top: 5px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .sugar-amount { 
+            padding: 8px 15px; 
+            border-radius: 20px; 
+            font-weight: 700; 
+            font-size: 0.9em; 
+            color: white;
+            position: relative;
+            z-index: 1;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .progress-stats { 
+            display: flex; 
+            justify-content: space-around; 
+            margin-top: 20px; 
+        }
+        
+        .stat { 
+            text-align: center;
+            transition: transform 0.2s ease;
+        }
+        
+        .stat:hover {
+            transform: scale(1.05);
+        }
+        
+        .stat-value { 
+            font-size: 2em; 
+            font-weight: 900; 
+            color: #16a34a; 
+            margin-bottom: 5px;
+            text-shadow: 2px 2px 4px rgba(22, 163, 74, 0.1);
+        }
+        
+        .stat-label { 
+            font-size: 0.9em; 
+            opacity: 0.8; 
+            text-transform: uppercase; 
+            letter-spacing: 1px; 
+            color: #495057; 
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            z-index: 1000;
+            animation: slideInNotification 0.3s ease-out;
+            max-width: 300px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .notification.success {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(22, 163, 74, 0.3);
+        }
+        
+        .notification.error {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(220, 38, 38, 0.3);
+        }
+        
+        @keyframes slideInNotification { 
+            from { transform: translateX(100%); opacity: 0; } 
+            to { transform: translateX(0); opacity: 1; } 
+        }
+        
+        .category-filters { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 10px; 
+            margin-bottom: 15px; 
+        }
+        
+        .category-btn { 
+            padding: 8px 16px; 
+            border: 2px solid rgba(34, 197, 94, 0.3); 
+            background: white; 
+            border-radius: 20px; 
+            cursor: pointer; 
+            font-weight: 600; 
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .category-btn.active { 
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); 
+            color: white; 
+            border-color: #22c55e;
+            transform: scale(1.05);
+        }
+        
+        .category-btn:hover {
+            background: rgba(34, 197, 94, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        .delete-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 5px 8px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+        
+        .delete-btn:hover {
+            background: #b91c1c;
+            transform: scale(1.1);
+        }
+        
+        @media (max-width: 480px) {
+            .header h1 { font-size: 2em; }
+            .content { padding: 15px; max-width: 100%; }
+            .nav { padding: 10px; }
+            .nav-item { font-size: 11px; padding: 6px 10px; }
+            .sugar-score { font-size: 2.5em; }
+            .category-filters { justify-content: center; }
+        }
+        
+        .glucose-zone {
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .glucose-normal {
+            background: rgba(22, 163, 74, 0.1);
+            border: 2px solid #16a34a;
+            color: #16a34a;
+        }
+        
+        .glucose-prediabetic {
+            background: rgba(245, 158, 11, 0.1);
+            border: 2px solid #f59e0b;
+            color: #f59e0b;
+        }
+        
+        .glucose-diabetic {
+            background: rgba(220, 38, 38, 0.1);
+            border: 2px solid #dc2626;
+            color: #dc2626;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(34, 197, 94, 0.3);
+            border-radius: 50%;
+            border-top-color: #22c55e;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div style="display: flex; align-items: center; justify-content: center; gap: 15px;">
+            <div style="text-align: center;">
+                <h1>🕵️ MySugarPal</h1>
+                <p>Your Complete Sugar Truth Guide - Navigate the Modern Food World with Confidence</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="nav">
+        <button class="nav-item active" onclick="showScreen('dashboard')">📊 Dashboard</button>
+        <button class="nav-item" onclick="showScreen('log')">🔍 Log Food</button>
+        <button class="nav-item" onclick="showScreen('glucose')">🩸 Blood Sugar</button>
+        <button class="nav-item" onclick="showScreen('weight')">⚖️ Weight</button>
+        <button class="nav-item" onclick="showScreen('custom')">⚗️ Create Food</button>
+        <button class="nav-item" onclick="showScreen('reports')">📋 Reports</button>
+        <button class="nav-item" onclick="showScreen('insights')">💡 Insights</button>
+    </div>
+
+    <div class="content">
+        <!-- Dashboard -->
+        <div id="dashboard" class="screen active">
+            <div class="card">
+                <h3>🕵️ Today's Sugar Truth</h3>
+                <div class="sugar-display">
+                    <div class="sugar-score zone-excellent" id="todaySugar">0g</div>
+                    <div class="zone-indicator excellent" id="sugarZone">EXCELLENT</div>
+                    <div id="gradeDisplay" style="margin-top: 10px; padding: 10px; border-radius: 8px; font-weight: bold; text-align: center; background: #10b98115; color: #10b981; border: 2px solid #10b98130;">
+                        ⭐ Grade: A+ - Outstanding sugar awareness!
+                    </div>
+                    <p style="position: relative; z-index: 1;">🌟 Knowledge is Power - You're Informed!</p>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>🛡️ Your Wellness Stats</h3>
+                <div class="progress-stats">
+                    <div class="stat">
+                        <div class="stat-value" id="statFoods">0</div>
+                        <div class="stat-label">Foods Analyzed</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="statSugar">0g</div>
+                        <div class="stat-label">Daily Total</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="statStreak">1</div>
+                        <div class="stat-label">Awareness Streak</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>📋 Today's Food Analysis</h3>
+                <div id="todayMealsDashboard">
+                    <div style="text-align: center; padding: 30px; opacity: 0.7;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">🕵️</div>
+                        <p>Ready to discover the sugar truth in your food!</p>
+                    </div>
+                </div>
+                <button class="btn" onclick="showScreen('log')">🔍 Discover Sugar Truth</button>
+            </div>
+        </div>
+
+        <!-- Log Food -->
+        <div id="log" class="screen">
+            <div class="card">
+                <h3>🔍 Modern Food Truth Finder</h3>
+                <div class="form-group">
+                    <label>Discover the Complete Sugar Story in Your Food</label>
+                    <input type="text" id="foodSearch" placeholder="🔍 Search: diet coke, pasta, apple..." oninput="searchFood()">
+                </div>
+                
+                <div class="category-filters">
+                    <button class="category-btn active" onclick="filterByCategory('all')">All Foods</button>
+                    <button class="category-btn" onclick="filterByCategory('beverages')">🥤 Drinks</button>
+                    <button class="category-btn" onclick="filterByCategory('breakfast')">🥣 Breakfast</button>
+                    <button class="category-btn" onclick="filterByCategory('main')">🍽️ Main</button>
+                    <button class="category-btn" onclick="filterByCategory('fruits')">🍎 Fruits</button>
+                    <button class="category-btn" onclick="filterByCategory('snacks')">🍪 Snacks</button>
+                </div>
+                
+                <div class="food-results" id="foodResults">
+                    <!-- Food results will be populated here -->
+                </div>
+                
+                <div style="margin-top: 15px; padding: 15px; background: rgba(34, 197, 94, 0.05); border-radius: 12px; border-left: 4px solid #22c55e;">
+                    <h4 style="margin-bottom: 10px; color: #16a34a;">🌟 UNDERSTANDING SUGAR IN OUR MODERN WORLD</h4>
+                    <p style="margin-bottom: 10px; font-size: 0.9em;"><strong>MySugarPal reveals the complete sugar story in today's food:</strong></p>
+                    <ul style="list-style: none; padding: 0; font-size: 0.85em; line-height: 1.4;">
+                        <li style="margin-bottom: 8px;">🍯 <strong>Visible Sugar:</strong> The sugars clearly listed on labels</li>
+                        <li style="margin-bottom: 8px;">🍞 <strong>Hidden Transformations:</strong> How everyday foods become sugar in your body</li>
+                        <li style="margin-bottom: 8px;">🧪 <strong>Modern Sweeteners:</strong> Understanding how artificial sweeteners affect your metabolism</li>
+                        <li style="margin-bottom: 8px;">🔄 <strong>Craving Cycles:</strong> Why some foods make you want more sweet things</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card" id="selectedFoodCard" style="display: none;">
+                <h3>🔍 Food Analysis</h3>
+                <div id="selectedFoodInfo"></div>
+                <div id="foodAnalysis"></div>
+                <button class="btn" onclick="logSelectedFood()">📝 Log This Food</button>
+            </div>
+        </div>
+
+        <!-- Blood Sugar -->
+        <div id="glucose" class="screen">
+            <div class="card">
+                <h3>🩸 Blood Sugar Tracking</h3>
+                <p style="margin-bottom: 20px; color: #16a34a; font-weight: 600;">
+                    📊 <strong>Track your blood glucose levels and discover correlations with the 4 sugar dimensions!</strong>
+                </p>
+                
+                <div class="form-group">
+                    <label>🩸 Blood Glucose Reading (mg/dL)</label>
+                    <input type="number" id="glucoseReading" placeholder="Enter your reading..." min="50" max="400">
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>📅 Date</label>
+                        <input type="date" id="glucoseDate">
+                    </div>
+                    <div class="form-group">
+                        <label>⏰ Time</label>
+                        <input type="time" id="glucoseTime">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>🍽️ Test Type</label>
+                    <select id="glucoseType">
+                        <option value="fasting">🌅 Fasting (8+ hours no food)</option>
+                        <option value="before_meal">🍽️ Before Meal</option>
+                        <option value="1hr_after">⏱️ 1 Hour After Meal</option>
+                        <option value="2hr_after">⏱️ 2 Hours After Meal</option>
+                        <option value="bedtime">🌙 Bedtime</option>
+                        <option value="random">🔀 Random</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>📝 Notes (Optional)</label>
+                    <input type="text" id="glucoseNotes" placeholder="e.g., after diet soda, felt energetic...">
+                </div>
+                
+                <button class="btn" onclick="logGlucoseReading()">🩸 Log Blood Sugar</button>
+            </div>
+            
+            <div class="card">
+                <h3>📊 Recent Readings</h3>
+                <div id="glucoseHistory">
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Start tracking to see your glucose patterns!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weight Tracking -->
+        <div id="weight" class="screen">
+            <div class="card">
+                <h3>⚖️ Weight Tracking</h3>
+                <p style="margin-bottom: 20px; color: #16a34a; font-weight: 600;">
+                    📈 <strong>Track your weight and discover correlations with sugar intake patterns!</strong>
+                </p>
+                
+                <div class="form-group">
+                    <label>⚖️ Weight</label>
+                    <div style="display: flex; gap: 10px; align-items: end;">
+                        <input type="number" id="weightValue" placeholder="Enter weight..." min="50" max="500" step="0.1" style="flex: 1;">
+                        <select id="weightUnit" style="width: 80px;">
+                            <option value="lbs">lbs</option>
+                            <option value="kg">kg</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>📅 Date</label>
+                        <input type="date" id="weightDate">
+                    </div>
+                    <div class="form-group">
+                        <label>⏰ Time</label>
+                        <input type="time" id="weightTime">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>🕐 Measurement Type</label>
+                    <select id="weightType">
+                        <option value="morning">🌅 Morning (after waking, before eating)</option>
+                        <option value="evening">🌙 Evening (before bed)</option>
+                        <option value="pre_meal">🍽️ Before Meal</option>
+                        <option value="post_meal">🍽️ After Meal</option>
+                        <option value="weekly">📊 Weekly Check-in</option>
+                        <option value="random">🔀 Random</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>📝 Notes (Optional)</label>
+                    <input type="text" id="weightNotes" placeholder="e.g., after high sugar day, feeling bloated...">
+                </div>
+                
+                <button class="btn" onclick="logWeightReading()">⚖️ Log Weight</button>
+            </div>
+            
+            <div class="card">
+                <h3>📊 Weight Progress</h3>
+                <div id="weightStats" style="display: none;">
+                    <div class="progress-stats" style="margin-bottom: 20px;">
+                        <div class="stat">
+                            <div class="stat-value" id="currentWeight">--</div>
+                            <div class="stat-label">Current Weight</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value" id="weightChange">--</div>
+                            <div class="stat-label">Change (7 days)</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value" id="weightTrend">--</div>
+                            <div class="stat-label">Trend</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="weightHistory">
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Start tracking to see your weight patterns and sugar correlations!</p>
+                </div>
+            </div>
+            
+            <div class="card" id="weightInsights" style="display: none;">
+                <h3>💡 Weight & Sugar Insights</h3>
+                <div id="weightInsightContent">
+                    <!-- Insights will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Custom Food Creator -->
+        <div id="custom" class="screen">
+            <div class="card">
+                <h3>🧪 Custom Food Creator</h3>
+                <p style="margin-bottom: 20px; color: #16a34a; font-weight: 600;">
+                    🌟 <strong>Create custom foods with accurate serving-size nutrition data!</strong>
+                </p>
+                
+                <div class="form-group">
+                    <label>Food Name</label>
+                    <input type="text" id="customName" placeholder="e.g., My Protein Smoothie, Homemade Pasta...">
+                </div>
+                
+                <div style="background: rgba(34, 197, 94, 0.05); padding: 15px; border-radius: 12px; margin: 15px 0; border-left: 4px solid #22c55e;">
+                    <h4 style="margin-bottom: 10px; color: #16a34a;">📏 Serving Size Information</h4>
+                    <p style="font-size: 0.9em; margin-bottom: 10px;">Enter nutrition facts <strong>per serving</strong> (as shown on nutrition labels)</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px; align-items: end;">
+                    <div class="form-group">
+                        <label>Serving Size Description</label>
+                        <input type="text" id="customServingSize" placeholder="e.g., 1 cup, 2 tbsp, 1 slice, 30g...">
+                    </div>
+                    <div class="form-group">
+                        <label>Servings per Container</label>
+                        <input type="number" id="customServingsPerContainer" value="1" min="0.1" step="0.1" placeholder="e.g., 8">
+                    </div>
+                </div>
+                
+                <div style="background: rgba(245, 158, 11, 0.05); padding: 12px; border-radius: 8px; margin: 10px 0;">
+                    <p style="font-size: 0.85em; color: #f59e0b; margin: 0;"><strong>💡 Tip:</strong> All nutrition values below should be <strong>per serving</strong>, not per container.</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>Sugar per Serving (grams)</label>
+                        <input type="number" id="customSugar" value="0" min="0" step="0.1" placeholder="From nutrition label">
+                    </div>
+                    <div class="form-group">
+                        <label>Total Carbs per Serving (grams)</label>
+                        <input type="number" id="customCarbs" value="0" min="0" step="0.1" placeholder="From nutrition label">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>🧪 Modern Sweeteners (Check if present)</label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" value="aspartame" class="sweetener-checkbox"> Aspartame
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" value="sucralose" class="sweetener-checkbox"> Sucralose
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" value="stevia" class="sweetener-checkbox"> Stevia
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" value="acesulfame" class="sweetener-checkbox"> Acesulfame K
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" value="saccharin" class="sweetener-checkbox"> Saccharin
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" value="erythritol" class="sweetener-checkbox"> Erythritol
+                        </label>
+                    </div>
+                </div>
+                
+                <div style="background: rgba(34, 197, 94, 0.05); padding: 15px; border-radius: 12px; margin: 15px 0;">
+                    <h4 style="margin-bottom: 10px; color: #16a34a;">🍽️ How Much Will You Eat?</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; align-items: end;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Number of Servings You'll Consume</label>
+                            <input type="number" id="customServingsToEat" value="1" min="0.1" step="0.1" placeholder="e.g., 1.5">
+                        </div>
+                        <div style="padding: 10px; background: rgba(22, 163, 74, 0.1); border-radius: 8px; border: 1px solid rgba(22, 163, 74, 0.2);">
+                            <div style="font-size: 0.8em; color: #16a34a; font-weight: bold;">Total Sugar Impact:</div>
+                            <div id="totalSugarPreview" style="font-size: 1.2em; font-weight: 900; color: #16a34a;">0g</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="btn" onclick="createCustomFood()">💾 Create & Log Food</button>
+                
+                <div style="margin-top: 15px; padding: 15px; background: rgba(34, 197, 94, 0.05); border-radius: 12px; border-left: 4px solid #22c55e;">
+                    <h4 style="margin-bottom: 10px; color: #16a34a;">📋 Example: Creating "Cereal with Milk"</h4>
+                    <ul style="list-style: none; padding: 0; font-size: 0.85em; line-height: 1.4;">
+                        <li style="margin-bottom: 8px;">🥣 <strong>Food Name:</strong> "Honey Nut Cheerios with 2% Milk"</li>
+                        <li style="margin-bottom: 8px;">📏 <strong>Serving Size:</strong> "1 cup cereal + 1/2 cup milk"</li>
+                        <li style="margin-bottom: 8px;">📦 <strong>Servings per Container:</strong> "10" (how many bowls the box makes)</li>
+                        <li style="margin-bottom: 8px;">🍯 <strong>Sugar per Serving:</strong> "12g" (from nutrition label)</li>
+                        <li style="margin-bottom: 8px;">🍞 <strong>Carbs per Serving:</strong> "28g" (from nutrition label)</li>
+                        <li style="margin-bottom: 8px;">🍽️ <strong>Servings to Eat:</strong> "1" (eating one bowl)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports -->
+        <div id="reports" class="screen">
+            <div class="card">
+                <h3>📋 MySugarPal Truth Reports</h3>
+                <p style="margin-bottom: 20px; color: #16a34a; font-weight: 600;">
+                    📊 <strong>Complete sugar transparency reports for you and your healthcare provider</strong>
+                </p>
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                    <button class="btn" onclick="generateReport('daily')">📄 Daily Report</button>
+                    <button class="btn" onclick="generateReport('weekly')">📊 Weekly Report</button>
+                    <button class="btn" onclick="generateReport('monthly')">📋 Monthly Report</button>
+                </div>
+                
+                <div style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); color: white; padding: 20px; border-radius: 12px; margin: 20px 0;">
+                    <h4>🌟 THE 4 DIMENSIONS OF SUGAR IN MODERN FOOD:</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-top: 15px;">
+                        <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                            <h5>🍯 VISIBLE SUGAR</h5>
+                            <p style="font-size: 0.85em;">Sugar clearly labeled on packages</p>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                            <h5>🍞 TRANSFORMATIONS</h5>
+                            <p style="font-size: 0.85em;">Foods that become sugar in your body</p>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                            <h5>🔄 CRAVING CYCLES</h5>
+                            <p style="font-size: 0.85em;">Ingredients affecting sweet desires</p>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.1); padding: 12px; border-radius: 8px;">
+                            <h5>⚠️ METABOLIC RESPONSES</h5>
+                            <p style="font-size: 0.85em;">How sweeteners affect your body</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Insights -->
+        <div id="insights" class="screen">
+            <div class="card">
+                <h3>💡 Smart Insights</h3>
+                <div id="insightsContent">
+                    <div style="text-align: center; padding: 40px; opacity: 0.7;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">🧠</div>
+                        <p>Track more foods to unlock personalized insights!</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h3>🏆 Achievement System</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; text-align: center;">
+                    <div id="badge-detective" style="padding: 20px; background: linear-gradient(135deg, #fbbf24, #f59e0b); border-radius: 12px; color: white;">
+                        <div style="font-size: 2em;">🕵️</div>
+                        <div style="font-weight: bold; font-size: 0.9em;">Sugar Detective</div>
+                        <div style="font-size: 0.8em; opacity: 0.9;">Earned!</div>
+                    </div>
+                    <div id="badge-tracker" style="padding: 20px; background: #f3f4f6; border-radius: 12px; opacity: 0.5;">
+                        <div style="font-size: 2em;">🩸</div>
+                        <div style="font-weight: bold; font-size: 0.9em;">Glucose Tracker</div>
+                        <div style="font-size: 0.8em;">Track 5 readings</div>
+                    </div>
+                    <div id="badge-creator" style="padding: 20px; background: #f3f4f6; border-radius: 12px; opacity: 0.5;">
+                        <div style="font-size: 2em;">🧪</div>
+                        <div style="font-weight: bold; font-size: 0.9em;">Food Creator</div>
+                        <div style="font-size: 0.8em;">Create 3 foods</div>
+                    </div>
+                    <div id="badge-streak" style="padding: 20px; background: #f3f4f6; border-radius: 12px; opacity: 0.5;">
+                        <div style="font-size: 2em;">🔥</div>
+                        <div style="font-weight: bold; font-size: 0.9em;">Streak Master</div>
+                        <div style="font-size: 0.8em;">7 day streak</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // App state
+        let todayLog = [];
+        let glucoseReadings = [];
+        let weightReadings = [];
+        let customFoods = [];
+        let selectedFood = null;
+        let dailyStreak = 1;
+
+        // Enhanced demo data with more foods
+        const demoFoods = {
+            'diet_coke': { 
+                name: 'Diet Coke (12oz)', 
+                sugar: 0, 
+                carbs: 0,
+                sweeteners: ['aspartame'], 
+                dimension: 'craving',
+                category: 'beverages',
+                analysis: 'Contains aspartame which can trigger 2.5x more sugar cravings. Your body may respond as if sugar is present even though there are 0g of actual sugar.'
+            },
+            'apple': { 
+                name: 'Apple (medium)', 
+                sugar: 19, 
+                carbs: 6,
+                sweeteners: [], 
+                dimension: 'visible',
+                category: 'fruits',
+                analysis: '19g of natural fructose, but the fiber in whole fruit helps slow absorption. This is visible sugar that your body processes naturally.'
+            },
+            'pasta': { 
+                name: 'Pasta (1 cup cooked)', 
+                sugar: 1, 
+                carbs: 35,
+                sweeteners: [], 
+                dimension: 'transformation',
+                category: 'main',
+                analysis: 'Contains 35g carbohydrates that transform into about 14g sugar equivalent in your bloodstream within 15-30 minutes. Total impact: 15g!'
+            },
+            'white_bread': {
+                name: 'White Bread (2 slices)',
+                sugar: 3,
+                carbs: 25,
+                sweeteners: [],
+                dimension: 'transformation',
+                category: 'breakfast',
+                analysis: '25g fast-converting carbs become 10g sugar equivalent + 3g direct sugar = 13g total sugar impact!'
+            },
+            'brown_rice': {
+                name: 'Brown Rice (1 cup)',
+                sugar: 1,
+                carbs: 20,
+                sweeteners: [],
+                dimension: 'transformation',
+                category: 'main',
+                analysis: '20g carbs convert to 6g sugar equivalent + 1g direct = 7g total sugar impact!'
+            },
+            'banana': {
+                name: 'Banana (medium)',
+                sugar: 14,
+                carbs: 8,
+                sweeteners: [],
+                dimension: 'visible',
+                category: 'fruits',
+                analysis: '14g natural fruit sugar plus 8g carbs that convert to 2g sugar equivalent = 16g total impact!'
+            },
+            'orange_juice': {
+                name: 'Orange Juice (8oz)',
+                sugar: 21,
+                carbs: 3,
+                sweeteners: [],
+                dimension: 'visible',
+                category: 'beverages',
+                analysis: '21g concentrated fruit sugar without fiber to slow absorption - hits bloodstream fast!'
+            },
+            'yogurt_vanilla': {
+                name: 'Vanilla Yogurt (6oz)',
+                sugar: 18,
+                carbs: 8,
+                sweeteners: [],
+                dimension: 'visible',
+                category: 'snacks',
+                analysis: '18g added sugar plus natural lactose. Consider plain yogurt with fresh fruit instead!'
+            },
+            'cereal_frosted': {
+                name: 'Frosted Flakes (1 cup)',
+                sugar: 11,
+                carbs: 25,
+                sweeteners: [],
+                dimension: 'transformation',
+                category: 'breakfast',
+                analysis: '11g direct sugar + 25g fast-converting carbs = 21g total sugar impact to start your day!'
+            },
+            'energy_drink': {
+                name: 'Energy Drink (16oz)',
+                sugar: 27,
+                carbs: 2,
+                sweeteners: ['sucralose', 'acesulfame'],
+                dimension: 'craving',
+                category: 'beverages',
+                analysis: '27g sugar PLUS artificial sweeteners that can increase cravings - double sugar impact!'
+            }
+        };
+
+        let currentCategory = 'all';
+
+        // Calculate total sugar impact including carb conversion
+        function calculateTotalSugarImpact(food) {
+            const directSugar = food.sugar || 0;
+            let convertedCarbs = 0;
+            
+            if (food.carbs && food.carbs > 0) {
+                // High-GI foods convert at higher rates
+                if (food.name.toLowerCase().includes('pasta') || 
+                    food.name.toLowerCase().includes('white bread') ||
+                    food.name.toLowerCase().includes('cereal') ||
+                    food.name.toLowerCase().includes('flakes')) {
+                    convertedCarbs = food.carbs * 0.4; // 40% conversion rate
+                } else if (food.name.toLowerCase().includes('rice') ||
+                          food.name.toLowerCase().includes('potato')) {
+                    convertedCarbs = food.carbs * 0.3; // 30% conversion rate
+                } else if (food.name.toLowerCase().includes('apple') ||
+                          food.name.toLowerCase().includes('banana') ||
+                          food.name.toLowerCase().includes('fruit')) {
+                    convertedCarbs = food.carbs * 0.25; // 25% conversion rate (fiber helps)
+                } else {
+                    convertedCarbs = food.carbs * 0.2; // Default 20% conversion
+                }
+            }
+            
+            return {
+                directSugar: directSugar,
+                convertedCarbs: Math.round(convertedCarbs),
+                totalSugarImpact: Math.round(directSugar + convertedCarbs)
+            };
+        }
+
+        // Get sugar zone classification
+        function getSugarZone(totalSugar) {
+            if (totalSugar <= 10) return { zone: 'excellent', text: 'EXCELLENT', grade: 'A+' };
+            if (totalSugar <= 25) return { zone: 'good', text: 'GOOD', grade: 'B+' };
+            if (totalSugar <= 50) return { zone: 'moderate', text: 'MODERATE', grade: 'C' };
+            return { zone: 'high', text: 'HIGH', grade: 'D' };
+        }
+
+        // Navigation function
+        function showScreen(screenName) {
+            // Hide all screens
+            document.querySelectorAll('.screen').forEach(screen => {
+                screen.classList.remove('active');
+            });
+            
+            // Show selected screen
+            document.getElementById(screenName).classList.add('active');
+            
+            // Update navigation
+            document.querySelectorAll('.nav-item').forEach(nav => {
+                nav.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Screen-specific updates
+            if (screenName === 'dashboard') {
+                updateDashboard();
+            } else if (screenName === 'glucose') {
+                updateGlucoseHistory();
+                setCurrentDateTime();
+            } else if (screenName === 'weight') {
+                updateWeightHistory();
+                setCurrentDateTimeWeight();
+            } else if (screenName === 'log') {
+                showAllFoods();
+            } else if (screenName === 'insights') {
+                updateInsights();
+            }
+        }
+
+        // Food search and selection
+        function searchFood() {
+            const query = document.getElementById('foodSearch').value.toLowerCase();
+            
+            if (!query) {
+                showAllFoods();
+                return;
+            }
+            
+            displayFoods(query);
+        }
+
+        function displayFoods(searchQuery = '', category = 'all') {
+            const resultsDiv = document.getElementById('foodResults');
+            let html = '';
+            let foodsToShow = [];
+            
+            // Combine demo foods and custom foods
+            const allFoods = { ...demoFoods };
+            customFoods.forEach((food, index) => {
+                allFoods[`custom_${index}`] = {
+                    name: food.originalName || food.name, // Use original name without serving info
+                    sugar: food.sugarPerServing || food.sugar, // Per serving values
+                    carbs: food.carbsPerServing || food.carbs,
+                    sweeteners: food.sweeteners || [],
+                    dimension: food.dimension,
+                    category: food.category || 'custom',
+                    analysis: food.analysis,
+                    servingSize: food.servingSize || '1 serving',
+                    isCustom: true,
+                    customIndex: index
+                };
+            });
+            
+            Object.entries(allFoods).forEach(([key, food]) => {
+                const matchesSearch = !searchQuery || food.name.toLowerCase().includes(searchQuery);
+                const matchesCategory = category === 'all' || food.category === category;
+                
+                if (matchesSearch && matchesCategory) {
+                    foodsToShow.push([key, food]);
+                }
+            });
+            
+            if (foodsToShow.length === 0) {
+                html = '<p style="text-align: center; opacity: 0.7; padding: 20px;">No foods found. Try "diet", "apple", "pasta", or "bread"</p>';
+            } else {
+                foodsToShow.forEach(([key, food]) => {
+                    const sugarData = calculateTotalSugarImpact(food);
+                    const borderColor = food.dimension === 'craving' ? 'border-left: 4px solid #dc2626;' : 
+                                       food.dimension === 'transformation' ? 'border-left: 4px solid #f59e0b;' : '';
+                    
+                    const dimensionBadge = food.dimension === 'craving' ? '<div style="font-size: 0.7em; color: #dc2626; font-weight: bold;">🔄 CRAVING CYCLE DETECTED</div>' :
+                                         food.dimension === 'transformation' ? '<div style="font-size: 0.7em; color: #f59e0b; font-weight: bold;">🍞 TRANSFORMATION DETECTED</div>' : '';
+                    
+                    const breakdown = sugarData.convertedCarbs > 0 ? 
+                        `<div style="font-size: 0.75em; color: #6c757d; margin-top: 3px;">${sugarData.directSugar}g direct + ${sugarData.convertedCarbs}g from carbs</div>` : '';
+                    
+                    // Show serving size for custom foods
+                    const servingInfo = food.isCustom ? 
+                        `<div style="font-size: 0.7em; color: #16a34a; font-weight: bold;">📏 Per ${food.servingSize}</div>` : '';
+                    
+                    const customBadge = food.isCustom ? 
+                        '<div style="font-size: 0.7em; color: #8b5cf6; font-weight: bold;">🧪 CUSTOM FOOD</div>' : '';
+                    
+                    html += `
+                        <div class="food-result" onclick="selectFood('${key}')" style="${borderColor}">
+                            <div>
+                                <div class="food-name">🔍 ${food.name}</div>
+                                <div class="food-info">${sugarData.totalSugarImpact}g total sugar impact per serving</div>
+                                ${servingInfo}
+                                ${breakdown}
+                                ${dimensionBadge}
+                                ${customBadge}
+                            </div>
+                            <div class="sugar-amount" style="background: ${sugarData.totalSugarImpact === 0 ? '#16a34a' : sugarData.totalSugarImpact > 15 ? '#dc2626' : '#f59e0b'}">${sugarData.totalSugarImpact}g</div>
+                        </div>
+                    `;
+                });
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        function showAllFoods() {
+            displayFoods('', currentCategory);
+        }
+
+        function filterByCategory(category) {
+            currentCategory = category;
+            
+            // Update active button
+            document.querySelectorAll('.category-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            displayFoods('', category);
+        }
+
+        function selectFood(foodKey) {
+            selectedFood = foodKey;
+            let food;
+            
+            if (foodKey.startsWith('custom_')) {
+                const index = parseInt(foodKey.replace('custom_', ''));
+                const originalFood = customFoods[index];
+                // Create a clean version for selection with per-serving data
+                food = {
+                    name: originalFood.originalName || originalFood.name,
+                    sugar: originalFood.sugarPerServing || originalFood.sugar,
+                    carbs: originalFood.carbsPerServing || originalFood.carbs,
+                    sweeteners: originalFood.sweeteners || [],
+                    dimension: originalFood.dimension,
+                    category: originalFood.category || 'custom',
+                    analysis: originalFood.analysis,
+                    servingSize: originalFood.servingSize || '1 serving',
+                    isCustom: true
+                };
+            } else {
+                food = demoFoods[foodKey];
+            }
+            
+            const sugarData = calculateTotalSugarImpact(food);
+            
+            document.getElementById('selectedFoodCard').style.display = 'block';
+            
+            const sugarColor = sugarData.totalSugarImpact === 0 ? '#16a34a' : sugarData.totalSugarImpact > 15 ? '#dc2626' : '#f59e0b';
+            
+            const breakdown = sugarData.convertedCarbs > 0 ? 
+                `<div style="font-size: 0.8em; color: #6c757d; margin-top: 5px;">
+                    <strong>Per Serving Breakdown:</strong> ${sugarData.directSugar}g direct sugar + ${sugarData.convertedCarbs}g from ${food.carbs}g carbs = ${sugarData.totalSugarImpact}g total impact
+                </div>` : '';
+            
+            const servingInfo = food.isCustom ? 
+                `<div style="font-size: 0.8em; color: #16a34a; margin-top: 5px; font-weight: bold;">
+                    📏 Serving Size: ${food.servingSize}
+                </div>` : '';
+            
+            document.getElementById('selectedFoodInfo').innerHTML = `
+                <div class="food-result selected">
+                    <div>
+                        <div class="food-name">🔍 ${food.name}</div>
+                        <div class="food-info">${sugarData.totalSugarImpact}g total sugar impact per serving</div>
+                        ${servingInfo}
+                        ${breakdown}
+                    </div>
+                    <div class="sugar-amount" style="background: ${sugarColor}">${sugarData.totalSugarImpact}g</div>
+                </div>
+            `;
+            
+            // Add serving size selector for logging
+            let servingSelectorHtml = '';
+            if (food.isCustom || true) { // Allow serving selection for all foods
+                servingSelectorHtml = `
+                    <div style="background: rgba(34, 197, 94, 0.05); padding: 15px; border-radius: 12px; margin: 15px 0;">
+                        <h4 style="color: #16a34a; margin-bottom: 10px;">🍽️ How much will you eat?</h4>
+                        <div style="display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: end;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #16a34a;">Number of Servings</label>
+                                <input type="number" id="servingsToLog" value="1" min="0.1" step="0.1" 
+                                       style="width: 100%; padding: 10px; border: 2px solid rgba(34, 197, 94, 0.3); border-radius: 8px;"
+                                       oninput="updateLogPreview()" placeholder="e.g., 1.5">
+                            </div>
+                            <div style="padding: 10px; background: rgba(22, 163, 74, 0.1); border-radius: 8px; text-align: center; min-width: 100px;">
+                                <div style="font-size: 0.8em; color: #16a34a; font-weight: bold;">Total Impact:</div>
+                                <div id="logSugarPreview" style="font-size: 1.2em; font-weight: 900; color: #16a34a;">${sugarData.totalSugarImpact}g</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            document.getElementById('foodAnalysis').innerHTML = `
+                <div style="background: rgba(34, 197, 94, 0.05); padding: 15px; border-radius: 12px; margin: 15px 0;">
+                    <h4 style="color: #16a34a;">🌟 MySugarPal Analysis:</h4>
+                    <p style="font-size: 0.9em; margin-top: 10px;">${food.analysis}</p>
+                    ${sugarData.convertedCarbs > 0 ? `
+                        <div style="margin-top: 10px; padding: 10px; background: rgba(245, 158, 11, 0.1); border-radius: 8px; border-left: 3px solid #f59e0b;">
+                            <strong>🍞 Hidden Transformation:</strong> ${food.carbs}g carbohydrates convert to ${sugarData.convertedCarbs}g sugar equivalent in your bloodstream!
+                        </div>
+                    ` : ''}
+                </div>
+                ${servingSelectorHtml}
+            `;
+            
+            // Scroll to selected food card
+            document.getElementById('selectedFoodCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Update preview when serving size changes
+        function updateLogPreview() {
+            const servingsInput = document.getElementById('servingsToLog');
+            const previewEl = document.getElementById('logSugarPreview');
+            
+            if (!servingsInput || !previewEl || !selectedFood) return;
+            
+            const servings = parseFloat(servingsInput.value) || 1;
+            
+            let food;
+            if (selectedFood.startsWith('custom_')) {
+                const index = parseInt(selectedFood.replace('custom_', ''));
+                const originalFood = customFoods[index];
+                food = {
+                    sugar: originalFood.sugarPerServing || originalFood.sugar,
+                    carbs: originalFood.carbsPerServing || originalFood.carbs
+                };
+            } else {
+                food = demoFoods[selectedFood];
+            }
+            
+            const totalSugar = (food.sugar || 0) * servings;
+            const totalCarbs = (food.carbs || 0) * servings;
+            const convertedSugar = Math.round(totalCarbs * 0.25);
+            const totalImpact = totalSugar + convertedSugar;
+            
+            previewEl.textContent = `${totalImpact.toFixed(1)}g`;
+            
+            // Color coding
+            if (totalImpact === 0) {
+                previewEl.style.color = '#16a34a';
+            } else if (totalImpact <= 10) {
+                previewEl.style.color = '#22c55e';
+            } else if (totalImpact <= 25) {
+                previewEl.style.color = '#f59e0b';
+            } else {
+                previewEl.style.color = '#dc2626';
+            }
+        }
+
+        function logSelectedFood() {
+            if (!selectedFood) return;
+            
+            // Get serving amount from input or default to 1
+            const servingsInput = document.getElementById('servingsToLog');
+            const servings = servingsInput ? parseFloat(servingsInput.value) || 1 : 1;
+            
+            let food;
+            let baseName;
+            if (selectedFood.startsWith('custom_')) {
+                const index = parseInt(selectedFood.replace('custom_', ''));
+                const originalFood = customFoods[index];
+                food = {
+                    sugar: originalFood.sugarPerServing || originalFood.sugar,
+                    carbs: originalFood.carbsPerServing || originalFood.carbs,
+                    dimension: originalFood.dimension
+                };
+                baseName = originalFood.originalName || originalFood.name;
+            } else {
+                food = demoFoods[selectedFood];
+                baseName = food.name;
+            }
+            
+            // Calculate total consumption
+            const totalSugar = (food.sugar || 0) * servings;
+            const totalCarbs = (food.carbs || 0) * servings;
+            
+            const sugarData = calculateTotalSugarImpact({
+                sugar: totalSugar,
+                carbs: totalCarbs
+            });
+            
+            // Create descriptive name with serving info
+            const servingText = servings === 1 ? '1 serving' : `${servings} servings`;
+            const logName = `${baseName} (${servingText})`;
+            
+            const entry = {
+                id: Date.now(),
+                name: logName,
+                sugar: sugarData.totalSugarImpact,
+                directSugar: sugarData.directSugar,
+                convertedCarbs: sugarData.convertedCarbs,
+                timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                dimension: food.dimension,
+                servingInfo: servingText
+            };
+            
+            todayLog.unshift(entry);
+            updateDashboard();
+            updateInsights();
+            showNotification(`✅ ${baseName} logged: ${servingText} = ${sugarData.totalSugarImpact}g total sugar impact!`);
+            
+            // Hide selection card
+            document.getElementById('selectedFoodCard').style.display = 'none';
+            selectedFood = null;
+        }
+
+        function deleteFood(index) {
+            if (index >= 0 && index < todayLog.length) {
+                const item = todayLog[index];
+                if (confirm(`Delete ${item.name}?`)) {
+                    todayLog.splice(index, 1);
+                    updateDashboard();
+                    updateInsights();
+                    showNotification(`${item.name} deleted`);
+                }
+            }
+        }
+
+        function updateDashboard() {
+            const totalSugar = todayLog.reduce((sum, entry) => sum + entry.sugar, 0);
+            const zoneInfo = getSugarZone(totalSugar);
+            
+            // Update main sugar display
+            document.getElementById('todaySugar').textContent = `${totalSugar}g`;
+            document.getElementById('todaySugar').className = `sugar-score zone-${zoneInfo.zone}`;
+            document.getElementById('sugarZone').textContent = zoneInfo.text;
+            document.getElementById('sugarZone').className = `zone-indicator ${zoneInfo.zone}`;
+            
+            // Update grade display
+            const gradeColors = {
+                'A+': { bg: '#10b98115', color: '#10b981', border: '#10b98130' },
+                'B+': { bg: '#22c55e15', color: '#22c55e', border: '#22c55e30' },
+                'C': { bg: '#f59e0b15', color: '#f59e0b', border: '#f59e0b30' },
+                'D': { bg: '#dc262615', color: '#dc2626', border: '#dc262630' }
+            };
+            
+            const gradeColor = gradeColors[zoneInfo.grade];
+            document.getElementById('gradeDisplay').innerHTML = `⭐ Grade: ${zoneInfo.grade} - ${getGradeMessage(zoneInfo.grade)}`;
+            document.getElementById('gradeDisplay').style.cssText = `margin-top: 10px; padding: 10px; border-radius: 8px; font-weight: bold; text-align: center; background: ${gradeColor.bg}; color: ${gradeColor.color}; border: 2px solid ${gradeColor.border};`;
+            
+            // Update stats
+            document.getElementById('statFoods').textContent = todayLog.length;
+            document.getElementById('statSugar').textContent = `${totalSugar}g`;
+            document.getElementById('statStreak').textContent = dailyStreak;
+            
+            // Update meals list
+            const mealsDiv = document.getElementById('todayMealsDashboard');
+            if (todayLog.length === 0) {
+                mealsDiv.innerHTML = `
+                    <div style="text-align: center; padding: 30px; opacity: 0.7;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">🕵️</div>
+                        <p>Ready to discover the sugar truth in your food!</p>
+                    </div>
+                `;
+            } else {
+                let html = '';
+                todayLog.slice(0, 5).forEach((entry, index) => {
+                    const sugarColor = entry.sugar === 0 ? '#16a34a' : entry.sugar > 15 ? '#dc2626' : '#f59e0b';
+                    const dimensionText = entry.dimension === 'craving' ? 'Craving Cycle Analysis' :
+                                         entry.dimension === 'transformation' ? 'Transformation Analysis' :
+                                         entry.dimension === 'visible' ? 'Visible Sugar' : 'Modern Food Analysis';
+                    
+                    const breakdown = (entry.convertedCarbs && entry.convertedCarbs > 0) ? 
+                        ` (${entry.directSugar}g + ${entry.convertedCarbs}g carbs)` : '';
+                    
+                    html += `
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #e9ecef;">
+                            <div style="flex: 1;">
+                                <div class="food-name">🔍 ${entry.name}</div>
+                                <div style="font-size: 0.8em; opacity: 0.7;">${entry.timestamp} • ${dimensionText}${breakdown}</div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="background: ${sugarColor}; color: white; padding: 5px 10px; border-radius: 15px; font-weight: bold;">${entry.sugar}g</div>
+                                <button onclick="deleteFood(${index})" class="delete-btn" title="Delete">✕</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                mealsDiv.innerHTML = html;
+            }
+        }
+
+        function getGradeMessage(grade) {
+            const messages = {
+                'A+': 'Outstanding sugar awareness!',
+                'B+': 'Good sugar management!',
+                'C': 'Room for improvement',
+                'D': 'Consider reducing sugar intake'
+            };
+            return messages[grade] || 'Keep tracking!';
+        }
+
+        // Date/Time utility functions
+        function setCurrentDateTime() {
+            const now = new Date();
+            document.getElementById('glucoseDate').value = now.toISOString().split('T')[0];
+            document.getElementById('glucoseTime').value = now.toTimeString().slice(0,5);
+        }
+
+        function setCurrentDateTimeWeight() {
+            const now = new Date();
+            document.getElementById('weightDate').value = now.toISOString().split('T')[0];
+            document.getElementById('weightTime').value = now.toTimeString().slice(0,5);
+        }
+
+        // Weight tracking functions
+        function logWeightReading() {
+            const weight = parseFloat(document.getElementById('weightValue').value);
+            const unit = document.getElementById('weightUnit').value;
+            const date = document.getElementById('weightDate').value;
+            const time = document.getElementById('weightTime').value;
+            const type = document.getElementById('weightType').value;
+            const notes = document.getElementById('weightNotes').value;
+            
+            if (!weight || weight < 50 || weight > 500) {
+                showNotification('Please enter a valid weight (50-500)', 'error');
+                return;
+            }
+            
+            // Convert to consistent unit (lbs) for calculations
+            const weightInLbs = unit === 'kg' ? weight * 2.20462 : weight;
+            
+            const entry = {
+                id: Date.now(),
+                weight: weight,
+                weightInLbs: weightInLbs,
+                unit: unit,
+                date: date,
+                time: time,
+                type: type,
+                notes: notes
+            };
+            
+            weightReadings.unshift(entry);
+            updateWeightHistory();
+            updateInsights();
+            showNotification(`⚖️ Weight logged: ${weight} ${unit}`);
+            
+            // Clear form
+            document.getElementById('weightValue').value = '';
+            document.getElementById('weightNotes').value = '';
+        }
+
+        function updateWeightHistory() {
+            const historyDiv = document.getElementById('weightHistory');
+            const statsDiv = document.getElementById('weightStats');
+            const insightsDiv = document.getElementById('weightInsights');
+            
+            if (!historyDiv) return;
+            
+            if (weightReadings.length === 0) {
+                historyDiv.innerHTML = `
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Start tracking to see your weight patterns and sugar correlations!</p>
+                `;
+                if (statsDiv) statsDiv.style.display = 'none';
+                if (insightsDiv) insightsDiv.style.display = 'none';
+                return;
+            }
+            
+            // Show stats if we have readings
+            if (statsDiv) statsDiv.style.display = 'block';
+            if (insightsDiv) insightsDiv.style.display = 'block';
+            
+            // Calculate statistics
+            const currentReading = weightReadings[0];
+            const currentWeight = `${currentReading.weight} ${currentReading.unit}`;
+            
+            // Calculate 7-day change
+            let weekAgoWeight = null;
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            for (let reading of weightReadings) {
+                const readingDate = new Date(reading.date);
+                if (readingDate <= sevenDaysAgo) {
+                    weekAgoWeight = reading;
+                    break;
+                }
+            }
+            
+            let weightChange = '--';
+            let trend = '--';
+            
+            if (weekAgoWeight && weightReadings.length >= 2) {
+                const change = currentReading.weightInLbs - weekAgoWeight.weightInLbs;
+                const changeDisplay = currentReading.unit === 'kg' ? (change / 2.20462).toFixed(1) : change.toFixed(1);
+                weightChange = `${change >= 0 ? '+' : ''}${changeDisplay} ${currentReading.unit}`;
+                
+                if (Math.abs(change) < 1) {
+                    trend = '➡️ Stable';
+                } else if (change > 0) {
+                    trend = '📈 Increasing';
+                } else {
+                    trend = '📉 Decreasing';
+                }
+            }
+            
+            // Update stats display safely
+            const currentWeightEl = document.getElementById('currentWeight');
+            const weightChangeEl = document.getElementById('weightChange');
+            const weightTrendEl = document.getElementById('weightTrend');
+            
+            if (currentWeightEl) currentWeightEl.textContent = currentWeight;
+            if (weightChangeEl) weightChangeEl.textContent = weightChange;
+            if (weightTrendEl) weightTrendEl.textContent = trend;
+            
+            // Update history list
+            let html = '';
+            weightReadings.slice(0, 10).forEach((reading, index) => {
+                const typeTexts = {
+                    'morning': '🌅 Morning',
+                    'evening': '🌙 Evening',
+                    'pre_meal': '🍽️ Before Meal',
+                    'post_meal': '🍽️ After Meal',
+                    'weekly': '📊 Weekly',
+                    'random': '🔀 Random'
+                };
+                
+                // Calculate change from previous reading
+                let changeText = '';
+                if (index < weightReadings.length - 1) {
+                    const prevReading = weightReadings[index + 1];
+                    const change = reading.weightInLbs - prevReading.weightInLbs;
+                    if (Math.abs(change) >= 0.1) {
+                        const changeDisplay = reading.unit === 'kg' ? (change / 2.20462).toFixed(1) : change.toFixed(1);
+                        const changeColor = change > 0 ? '#f59e0b' : change < 0 ? '#22c55e' : '#6c757d';
+                        changeText = `<span style="color: ${changeColor}; font-weight: bold;">(${change >= 0 ? '+' : ''}${changeDisplay})</span>`;
+                    }
+                }
+                
+                html += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e9ecef;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600;">⚖️ ${reading.weight} ${reading.unit} ${changeText}</div>
+                            <div style="font-size: 0.8em; opacity: 0.7;">
+                                ${typeTexts[reading.type] || reading.type} • ${reading.date} ${reading.time}
+                                ${reading.notes ? ` • "${reading.notes}"` : ''}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="background: #16a34a; color: white; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.9em;">
+                                LOGGED
+                            </div>
+                            <button onclick="deleteWeightReading(${index})" class="delete-btn" title="Delete">✕</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            historyDiv.innerHTML = html;
+            
+            // Update weight insights
+            updateWeightInsights();
+        }
+
+        function deleteWeightReading(index) {
+            if (index >= 0 && index < weightReadings.length) {
+                const reading = weightReadings[index];
+                if (confirm(`Delete ${reading.weight} ${reading.unit} reading?`)) {
+                    weightReadings.splice(index, 1);
+                    updateWeightHistory();
+                    updateInsights();
+                    showNotification('Weight reading deleted');
+                }
+            }
+        }
+
+        function updateWeightInsights() {
+            const insightDiv = document.getElementById('weightInsightContent');
+            
+            if (!insightDiv || weightReadings.length < 2) {
+                if (insightDiv) {
+                    insightDiv.innerHTML = `
+                        <p style="text-align: center; opacity: 0.7; padding: 20px;">Track more weights to see correlations with sugar intake!</p>
+                    `;
+                }
+                return;
+            }
+            
+            // Calculate correlations and insights
+            const recentWeightChange = weightReadings.length >= 2 ? 
+                weightReadings[0].weightInLbs - weightReadings[1].weightInLbs : 0;
+            
+            // Get today's sugar intake
+            const todaySugar = todayLog.reduce((sum, entry) => sum + entry.sugar, 0);
+            
+            let insights = [];
+            
+            // Weight trend insights
+            if (Math.abs(recentWeightChange) >= 1) {
+                const direction = recentWeightChange > 0 ? 'increased' : 'decreased';
+                const amount = Math.abs(recentWeightChange).toFixed(1);
+                const unit = weightReadings[0].unit === 'kg' ? (amount / 2.20462).toFixed(1) + ' kg' : amount + ' lbs';
+                
+                insights.push({
+                    icon: recentWeightChange > 0 ? '📈' : '📉',
+                    title: `Weight ${direction.charAt(0).toUpperCase() + direction.slice(1)}`,
+                    text: `Your weight has ${direction} by ${unit} since last measurement.`,
+                    type: recentWeightChange > 0 ? 'warning' : 'positive'
+                });
+            }
+            
+            // Sugar correlation insights
+            if (todaySugar > 25 && recentWeightChange > 0) {
+                insights.push({
+                    icon: '🍯',
+                    title: 'Sugar & Weight Correlation',
+                    text: `High sugar intake (${todaySugar}g) may be contributing to weight changes. Consider reducing processed foods.`,
+                    type: 'warning'
+                });
+            } else if (todaySugar <= 15 && recentWeightChange <= 0) {
+                insights.push({
+                    icon: '🌟',
+                    title: 'Positive Progress',
+                    text: `Low sugar intake (${todaySugar}g) aligns with stable/decreasing weight. Keep up the great work!`,
+                    type: 'positive'
+                });
+            }
+            
+            // Consistency insights
+            if (weightReadings.length >= 7) {
+                insights.push({
+                    icon: '📊',
+                    title: 'Consistent Tracking',
+                    text: `Great job tracking regularly! Consistent monitoring helps identify patterns between sugar intake and weight changes.`,
+                    type: 'positive'
+                });
+            }
+            
+            let html = '';
+            if (insights.length === 0) {
+                html = `
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Track more data to unlock weight and sugar correlations!</p>
+                `;
+            } else {
+                insights.forEach(insight => {
+                    const bgColor = insight.type === 'positive' ? 'rgba(22, 163, 74, 0.1)' :
+                                   insight.type === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(34, 197, 94, 0.1)';
+                    const borderColor = insight.type === 'positive' ? '#16a34a' :
+                                       insight.type === 'warning' ? '#f59e0b' : '#22c55e';
+                    
+                    html += `
+                        <div style="background: ${bgColor}; border-left: 4px solid ${borderColor}; padding: 15px; margin: 15px 0; border-radius: 8px;">
+                            <h4 style="margin: 0 0 8px 0; color: ${borderColor};">${insight.icon} ${insight.title}</h4>
+                            <p style="margin: 0; font-size: 0.9em;">${insight.text}</p>
+                        </div>
+                    `;
+                });
+            }
+            
+            insightDiv.innerHTML = html;
+        }
+
+        // Blood glucose functions
+
+        function logGlucoseReading() {
+            const reading = parseFloat(document.getElementById('glucoseReading').value);
+            const date = document.getElementById('glucoseDate').value;
+            const time = document.getElementById('glucoseTime').value;
+            const type = document.getElementById('glucoseType').value;
+            const notes = document.getElementById('glucoseNotes').value;
+            
+            if (!reading || reading < 50 || reading > 400) {
+                showNotification('Please enter a valid reading (50-400 mg/dL)', 'error');
+                return;
+            }
+            
+            const category = getGlucoseCategory(reading, type);
+            const entry = {
+                id: Date.now(),
+                reading: reading,
+                date: date,
+                time: time,
+                type: type,
+                notes: notes,
+                category: category
+            };
+            
+            glucoseReadings.unshift(entry);
+            updateGlucoseHistory();
+            updateInsights();
+            showNotification(`🩸 Blood glucose logged: ${reading} mg/dL`);
+            
+            // Clear form
+            document.getElementById('glucoseReading').value = '';
+            document.getElementById('glucoseNotes').value = '';
+        }
+
+        function getGlucoseCategory(reading, type) {
+            if (type === 'fasting') {
+                if (reading < 100) return 'normal';
+                if (reading <= 125) return 'prediabetic';
+                return 'diabetic';
+            } else {
+                if (reading < 140) return 'normal';
+                if (reading <= 199) return 'elevated';
+                return 'high';
+            }
+        }
+
+        function updateGlucoseHistory() {
+            const historyDiv = document.getElementById('glucoseHistory');
+            
+            if (glucoseReadings.length === 0) {
+                historyDiv.innerHTML = `
+                    <p style="text-align: center; opacity: 0.7; padding: 20px;">Start tracking to see your glucose patterns!</p>
+                `;
+                return;
+            }
+            
+            let html = '';
+            glucoseReadings.slice(0, 10).forEach((reading, index) => {
+                const categoryColors = {
+                    'normal': '#16a34a',
+                    'prediabetic': '#f59e0b',
+                    'diabetic': '#dc2626',
+                    'elevated': '#f59e0b',
+                    'high': '#dc2626'
+                };
+                
+                const categoryTexts = {
+                    'normal': 'NORMAL',
+                    'prediabetic': 'PRE-DIABETIC',
+                    'diabetic': 'DIABETIC',
+                    'elevated': 'ELEVATED',
+                    'high': 'HIGH'
+                };
+                
+                const testTypes = {
+                    'fasting': '🌅 Fasting',
+                    'before_meal': '🍽️ Before Meal',
+                    '1hr_after': '⏱️ 1 Hour After',
+                    '2hr_after': '⏱️ 2 Hours After',
+                    'bedtime': '🌙 Bedtime',
+                    'random': '🔀 Random'
+                };
+                
+                html += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #e9ecef;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600;">🩸 ${reading.reading} mg/dL - ${categoryTexts[reading.category] || 'Unknown'}</div>
+                            <div style="font-size: 0.8em; opacity: 0.7;">
+                                ${testTypes[reading.type] || reading.type} • ${reading.date} ${reading.time}
+                                ${reading.notes ? ` • "${reading.notes}"` : ''}
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="background: ${categoryColors[reading.category] || '#6c757d'}; color: white; padding: 5px 10px; border-radius: 15px; font-weight: bold; font-size: 0.9em;">
+                                ${categoryTexts[reading.category] || 'UNKNOWN'}
+                            </div>
+                            <button onclick="deleteGlucoseReading(${index})" class="delete-btn" title="Delete">✕</button>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            historyDiv.innerHTML = html;
+        }
+
+        function deleteGlucoseReading(index) {
+            if (index >= 0 && index < glucoseReadings.length) {
+                const reading = glucoseReadings[index];
+                if (confirm(`Delete ${reading.reading} mg/dL reading?`)) {
+                    glucoseReadings.splice(index, 1);
+                    updateGlucoseHistory();
+                    updateInsights();
+                    showNotification('Blood glucose reading deleted');
+                }
+            }
+        }
+
+        // Custom food creator
+        function createCustomFood() {
+            const name = document.getElementById('customName').value.trim();
+            const servingSize = document.getElementById('customServingSize').value.trim();
+            const servingsPerContainer = parseFloat(document.getElementById('customServingsPerContainer').value) || 1;
+            const sugarPerServing = parseFloat(document.getElementById('customSugar').value) || 0;
+            const carbsPerServing = parseFloat(document.getElementById('customCarbs').value) || 0;
+            const servingsToEat = parseFloat(document.getElementById('customServingsToEat').value) || 1;
+            
+            // Get selected sweeteners
+            const sweeteners = [];
+            document.querySelectorAll('.sweetener-checkbox:checked').forEach(checkbox => {
+                sweeteners.push(checkbox.value);
+            });
+            
+            if (!name) {
+                showNotification('Please enter a food name', 'error');
+                return;
+            }
+            
+            if (!servingSize) {
+                showNotification('Please enter a serving size description', 'error');
+                return;
+            }
+            
+            // Calculate total consumption based on servings eaten
+            const totalSugar = sugarPerServing * servingsToEat;
+            const totalCarbs = carbsPerServing * servingsToEat;
+            
+            // Determine dimension based on sweeteners and carb content
+            let dimension = 'visible';
+            let analysis = `Custom food: ${servingsToEat} serving${servingsToEat !== 1 ? 's' : ''} of ${servingSize}. Contains ${totalSugar.toFixed(1)}g visible sugar.`;
+            
+            if (sweeteners.length > 0) {
+                dimension = 'craving';
+                analysis = `Contains artificial sweeteners (${sweeteners.join(', ')}) which may trigger sugar cravings and metabolic responses. Total servings consumed: ${servingsToEat}.`;
+            } else if (totalCarbs > 10) {
+                dimension = 'transformation';
+                const convertedSugar = Math.round(totalCarbs * 0.25);
+                analysis = `${servingsToEat} serving${servingsToEat !== 1 ? 's' : ''} contains ${totalCarbs.toFixed(1)}g carbohydrates that will convert to approximately ${convertedSugar}g sugar equivalent in your bloodstream.`;
+            }
+            
+            // Create the food entry for logging (represents what they actually ate)
+            const customFood = {
+                name: `${name} (${servingsToEat} serving${servingsToEat !== 1 ? 's' : ''})`,
+                originalName: name,
+                servingSize: servingSize,
+                servingsPerContainer: servingsPerContainer,
+                sugarPerServing: sugarPerServing,
+                carbsPerServing: carbsPerServing,
+                servingsConsumed: servingsToEat,
+                sugar: totalSugar, // Total sugar consumed
+                carbs: totalCarbs, // Total carbs consumed
+                sweeteners: sweeteners,
+                dimension: dimension,
+                category: 'custom',
+                analysis: analysis
+            };
+            
+            // Log the food directly (since they created it to eat it)
+            const sugarData = calculateTotalSugarImpact(customFood);
+            
+            const entry = {
+                id: Date.now(),
+                name: customFood.name,
+                sugar: sugarData.totalSugarImpact,
+                directSugar: sugarData.directSugar,
+                convertedCarbs: sugarData.convertedCarbs,
+                timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                dimension: customFood.dimension,
+                servingInfo: `${servingsToEat} × ${servingSize}`
+            };
+            
+            // Add to custom foods for future reference (store per-serving data)
+            const customFoodDefinition = {
+                originalName: name,
+                servingSize: servingSize,
+                servingsPerContainer: servingsPerContainer,
+                sugarPerServing: sugarPerServing,
+                carbsPerServing: carbsPerServing,
+                sweeteners: sweeteners,
+                dimension: dimension,
+                category: 'custom',
+                analysis: `Per serving (${servingSize}): ${sugarPerServing}g sugar, ${carbsPerServing}g carbs. ${sweeteners.length > 0 ? `Contains ${sweeteners.join(', ')}.` : ''}`
+            };
+            
+            customFoods.push(customFoodDefinition);
+            
+            // Log the consumed amount
+            todayLog.unshift(entry);
+            updateDashboard();
+            updateInsights();
+            
+            showNotification(`✅ "${customFood.originalName}" created and logged: ${sugarData.totalSugarImpact}g total sugar impact from ${servingsToEat} serving${servingsToEat !== 1 ? 's' : ''}!`);
+            
+            // Clear form
+            document.getElementById('customName').value = '';
+            document.getElementById('customServingSize').value = '';
+            document.getElementById('customServingsPerContainer').value = '1';
+            document.getElementById('customSugar').value = '0';
+            document.getElementById('customCarbs').value = '0';
+            document.getElementById('customServingsToEat').value = '1';
+            document.querySelectorAll('.sweetener-checkbox').forEach(cb => cb.checked = false);
+            updateSugarPreview();
+            
+            // Update insights for badge tracking
+            updateInsights();
+        }
+
+        // Real-time sugar impact preview
+        function updateSugarPreview() {
+            const sugarPerServing = parseFloat(document.getElementById('customSugar').value) || 0;
+            const carbsPerServing = parseFloat(document.getElementById('customCarbs').value) || 0;
+            const servingsToEat = parseFloat(document.getElementById('customServingsToEat').value) || 1;
+            
+            const totalSugar = sugarPerServing * servingsToEat;
+            const totalCarbs = carbsPerServing * servingsToEat;
+            
+            // Calculate conversion (simplified)
+            const convertedSugar = Math.round(totalCarbs * 0.25);
+            const totalImpact = totalSugar + convertedSugar;
+            
+            const previewEl = document.getElementById('totalSugarPreview');
+            if (previewEl) {
+                previewEl.textContent = `${totalImpact.toFixed(1)}g`;
+                
+                // Color coding
+                if (totalImpact === 0) {
+                    previewEl.style.color = '#16a34a';
+                } else if (totalImpact <= 10) {
+                    previewEl.style.color = '#22c55e';
+                } else if (totalImpact <= 25) {
+                    previewEl.style.color = '#f59e0b';
+                } else {
+                    previewEl.style.color = '#dc2626';
+                }
+            }
+        }
+
+        // Report generation
+        function generateReport(reportType) {
+            const totalSugar = todayLog.reduce((sum, entry) => sum + entry.sugar, 0);
+            const zoneInfo = getSugarZone(totalSugar);
+            
+            showNotification(`📊 ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} report generated!`);
+            
+            // Create a comprehensive report
+            const reportWindow = window.open('', '_blank', 'width=800,height=600,scrollbars=yes');
+            const reportDate = new Date().toLocaleDateString();
+            
+            reportWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>MySugarPal ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 40px; line-height: 1.6; color: #333; }
+                        .header { text-align: center; border-bottom: 3px solid #16a34a; padding-bottom: 20px; margin-bottom: 30px; }
+                        .section { margin: 30px 0; padding: 20px; border-radius: 8px; background: #f9f9f9; }
+                        .dimension { margin: 15px 0; padding: 15px; border-left: 4px solid #22c55e; background: white; }
+                        .metric { display: inline-block; margin: 10px 20px; text-align: center; }
+                        .metric-value { font-size: 24px; font-weight: bold; color: #16a34a; }
+                        .grade-${zoneInfo.zone} { background: ${zoneInfo.zone === 'excellent' ? '#f0fdf4' : zoneInfo.zone === 'good' ? '#f0fdf4' : zoneInfo.zone === 'moderate' ? '#fffbeb' : '#fef2f2'}; }
+                        @media print { body { padding: 20px; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h1 style="color: #16a34a; margin: 0;">🕵️ MySugarPal Truth Report</h1>
+                        <h2 style="margin: 5px 0;">${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Sugar Analysis</h2>
+                        <p style="margin: 0; color: #666;">Generated on ${reportDate}</p>
+                    </div>
+                    
+                    <div class="section grade-${zoneInfo.zone}">
+                        <h3>📊 Overall Sugar Assessment</h3>
+                        <div class="metric">
+                            <div class="metric-value">${totalSugar}g</div>
+                            <div>Total Sugar Impact</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value" style="color: ${zoneInfo.zone === 'excellent' ? '#16a34a' : zoneInfo.zone === 'good' ? '#22c55e' : zoneInfo.zone === 'moderate' ? '#f59e0b' : '#dc2626'}">${zoneInfo.grade}</div>
+                            <div>Sugar Grade</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-value">${todayLog.length}</div>
+                            <div>Foods Analyzed</div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h3>🌟 4-Dimension Sugar Analysis</h3>
+                        <div class="dimension">
+                            <h4>🍯 Visible Sugar Dimension</h4>
+                            <p>Traditional sugar clearly labeled on food packages.</p>
+                            <p><strong>Today's Total:</strong> ${todayLog.reduce((sum, entry) => sum + (entry.directSugar || 0), 0)}g direct sugar</p>
+                        </div>
+                        <div class="dimension">
+                            <h4>🍞 Hidden Transformation Dimension</h4>
+                            <p>Carbohydrates that convert to sugar in your bloodstream.</p>
+                            <p><strong>Today's Total:</strong> ${todayLog.reduce((sum, entry) => sum + (entry.convertedCarbs || 0), 0)}g from carbohydrate conversion</p>
+                        </div>
+                        <div class="dimension">
+                            <h4>🔄 Craving Cycle Dimension</h4>
+                            <p>Artificial sweeteners and ingredients that may trigger sugar cravings.</p>
+                            <p><strong>Exposure:</strong> ${todayLog.some(entry => entry.dimension === 'craving') ? 'Detected in logged foods' : 'None detected today'}</p>
+                        </div>
+                        <div class="dimension">
+                            <h4>⚠️ Metabolic Response Dimension</h4>
+                            <p>How different sweeteners and food combinations affect your metabolism.</p>
+                            <p><strong>Assessment:</strong> Individual responses may vary based on food combinations and timing.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h3>📋 Detailed Food Log</h3>
+                        ${todayLog.length === 0 ? '<p>No foods logged for this period.</p>' : 
+                          todayLog.map(entry => `
+                            <div style="margin: 10px 0; padding: 10px; border-left: 3px solid #22c55e; background: white;">
+                                <strong>${entry.name}</strong> - ${entry.sugar}g total sugar impact<br>
+                                <small style="color: #666;">Logged at ${entry.timestamp} • ${entry.dimension === 'craving' ? 'Craving Cycle Analysis' : entry.dimension === 'transformation' ? 'Transformation Analysis' : 'Visible Sugar Analysis'}</small>
+                            </div>
+                          `).join('')}
+                    </div>
+                    
+                    ${weightReadings.length > 0 ? `
+                    <div class="section">
+                        <h3>⚖️ Weight Correlation</h3>
+                        <p><strong>Recent Measurements:</strong></p>
+                        ${weightReadings.slice(0, 5).map(reading => `
+                            <div style="margin: 5px 0; padding: 8px; background: white; border-radius: 4px;">
+                                ${reading.weight} ${reading.unit} (${reading.type}) - ${reading.date} ${reading.time}
+                            </div>
+                        `).join('')}
+                        <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+                            <strong>Sugar-Weight Connection:</strong> Higher sugar intake can lead to water retention and weight fluctuations. 
+                            Track both metrics to identify patterns and optimize your health journey.
+                        </p>
+                    </div>
+                    ` : ''}
+                    
+                    ${glucoseReadings.length > 0 ? `
+                    <div class="section">
+                        <h3>🩸 Blood Glucose Correlation</h3>
+                        <p><strong>Recent Readings:</strong></p>
+                        ${glucoseReadings.slice(0, 5).map(reading => `
+                            <div style="margin: 5px 0; padding: 8px; background: white; border-radius: 4px;">
+                                ${reading.reading} mg/dL (${reading.type}) - ${reading.date} ${reading.time}
+                            </div>
+                        `).join('')}
+                    </div>
+                    ` : ''}
+                    
+                    <div class="section">
+                        <h3>💡 Personalized Recommendations</h3>
+                        <ul>
+                            <li><strong>WHO Guidelines:</strong> Limit added sugars to 25g daily (6 teaspoons)</li>
+                            <li><strong>Hidden Sugars:</strong> Be aware of carbohydrate conversion in processed foods</li>
+                            <li><strong>Artificial Sweeteners:</strong> Monitor how they affect your cravings and appetite</li>
+                            <li><strong>Timing:</strong> Consider blood glucose testing 1-2 hours after meals</li>
+                            <li><strong>Whole Foods:</strong> Choose fruits over fruit juices for natural fiber benefits</li>
+                        </ul>
+                    </div>
+                    
+                    <div style="margin-top: 40px; padding: 20px; background: #e8f5f3; border-radius: 8px; text-align: center;">
+                        <p style="margin: 0; color: #16a34a; font-weight: bold;">
+                            📱 Generated by MySugarPal - Your Complete Sugar Truth Guide<br>
+                            <small style="color: #666;">This report is for educational purposes. Consult healthcare providers for medical advice.</small>
+                        </p>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+
+        // Insights and analytics
+        function updateInsights() {
+            const insightsDiv = document.getElementById('insightsContent');
+            
+            if (todayLog.length === 0 && glucoseReadings.length === 0) {
+                insightsDiv.innerHTML = `
+                    <div style="text-align: center; padding: 40px; opacity: 0.7;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">🧠</div>
+                        <p>Track more foods to unlock personalized insights!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            const totalSugar = todayLog.reduce((sum, entry) => sum + entry.sugar, 0);
+            const directSugar = todayLog.reduce((sum, entry) => sum + (entry.directSugar || 0), 0);
+            const convertedSugar = todayLog.reduce((sum, entry) => sum + (entry.convertedCarbs || 0), 0);
+            const cravingFoods = todayLog.filter(entry => entry.dimension === 'craving').length;
+            
+            let insights = [];
+            
+            // Sugar level insights
+            if (totalSugar <= 10) {
+                insights.push({
+                    icon: '🌟',
+                    title: 'Excellent Sugar Management',
+                    text: `You're staying well within healthy limits with ${totalSugar}g total sugar impact today!`,
+                    type: 'positive'
+                });
+            } else if (totalSugar <= 25) {
+                insights.push({
+                    icon: '👍',
+                    title: 'Good Sugar Control',
+                    text: `At ${totalSugar}g, you're near the WHO recommended limit of 25g daily.`,
+                    type: 'neutral'
+                });
+            } else {
+                insights.push({
+                    icon: '⚠️',
+                    title: 'Consider Reducing Sugar',
+                    text: `${totalSugar}g exceeds the WHO recommended 25g daily limit. Focus on whole foods.`,
+                    type: 'warning'
+                });
+            }
+            
+            // Hidden sugar insights
+            if (convertedSugar > directSugar && convertedSugar > 5) {
+                insights.push({
+                    icon: '🍞',
+                    title: 'Hidden Sugar Alert',
+                    text: `${convertedSugar}g of your sugar comes from carbohydrate conversion - more than direct sugar!`,
+                    type: 'warning'
+                });
+            }
+            
+            // Craving cycle insights
+            if (cravingFoods > 0) {
+                insights.push({
+                    icon: '🔄',
+                    title: 'Craving Cycle Detected',
+                    text: `${cravingFoods} food(s) with artificial sweeteners may be affecting your sugar cravings.`,
+                    type: 'warning'
+                });
+            }
+            
+            // Weight insights
+            if (weightReadings.length > 0) {
+                const recentWeightChange = weightReadings.length >= 2 ? 
+                    weightReadings[0].weightInLbs - weightReadings[1].weightInLbs : 0;
+                
+                if (Math.abs(recentWeightChange) >= 1) {
+                    const direction = recentWeightChange > 0 ? 'increased' : 'decreased';
+                    const amount = Math.abs(recentWeightChange).toFixed(1);
+                    
+                    insights.push({
+                        icon: '⚖️',
+                        title: 'Weight Tracking Active',
+                        text: `Weight has ${direction} by ${amount} lbs since last measurement. ${weightReadings.length} total readings logged.`,
+                        type: recentWeightChange > 0 ? 'warning' : 'positive'
+                    });
+                }
+                
+                // Sugar-weight correlation
+                if (totalSugar > 25 && recentWeightChange > 0) {
+                    insights.push({
+                        icon: '⚠️',
+                        title: 'Sugar-Weight Alert',
+                        text: `High sugar intake (${totalSugar}g) combined with weight increase suggests reviewing food choices.`,
+                        type: 'warning'
+                    });
+                }
+            }
+
+            // Glucose insights
+            if (glucoseReadings.length > 0) {
+                const avgGlucose = glucoseReadings.reduce((sum, reading) => sum + reading.reading, 0) / glucoseReadings.length;
+                insights.push({
+                    icon: '🩸',
+                    title: 'Glucose Tracking Active',
+                    text: `Average reading: ${Math.round(avgGlucose)} mg/dL from ${glucoseReadings.length} measurements.`,
+                    type: 'positive'
+                });
+            }
+            
+            let html = '';
+            if (insights.length === 0) {
+                html = `
+                    <div style="text-align: center; padding: 40px; opacity: 0.7;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">📊</div>
+                        <p>Keep tracking to generate insights!</p>
+                    </div>
+                `;
+            } else {
+                insights.forEach(insight => {
+                    const bgColor = insight.type === 'positive' ? 'rgba(22, 163, 74, 0.1)' :
+                                   insight.type === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(34, 197, 94, 0.1)';
+                    const borderColor = insight.type === 'positive' ? '#16a34a' :
+                                       insight.type === 'warning' ? '#f59e0b' : '#22c55e';
+                    
+                    html += `
+                        <div style="background: ${bgColor}; border-left: 4px solid ${borderColor}; padding: 15px; margin: 15px 0; border-radius: 8px;">
+                            <h4 style="margin: 0 0 8px 0; color: ${borderColor};">${insight.icon} ${insight.title}</h4>
+                            <p style="margin: 0; font-size: 0.9em;">${insight.text}</p>
+                        </div>
+                    `;
+                });
+            }
+            
+            insightsDiv.innerHTML = html;
+            
+            // Update badges
+            updateBadges();
+        }
+
+        function updateBadges() {
+            // Sugar Detective badge (always earned)
+            // Already styled as earned in HTML
+            
+            // Glucose Tracker badge
+            const trackerBadge = document.getElementById('badge-tracker');
+            if (glucoseReadings.length >= 5) {
+                trackerBadge.style.cssText = 'padding: 20px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 12px; color: white;';
+                trackerBadge.innerHTML = `
+                    <div style="font-size: 2em;">🩸</div>
+                    <div style="font-weight: bold; font-size: 0.9em;">Glucose Tracker</div>
+                    <div style="font-size: 0.8em; opacity: 0.9;">Earned!</div>
+                `;
+            }
+            
+            // Food Creator badge
+            const creatorBadge = document.getElementById('badge-creator');
+            if (customFoods.length >= 3) {
+                creatorBadge.style.cssText = 'padding: 20px; background: linear-gradient(135deg, #8b5cf6, #7c3aed); border-radius: 12px; color: white;';
+                creatorBadge.innerHTML = `
+                    <div style="font-size: 2em;">🧪</div>
+                    <div style="font-weight: bold; font-size: 0.9em;">Food Creator</div>
+                    <div style="font-size: 0.8em; opacity: 0.9;">Earned!</div>
+                `;
+            }
+            
+            // Streak badge
+            const streakBadge = document.getElementById('badge-streak');
+            if (dailyStreak >= 7) {
+                streakBadge.style.cssText = 'padding: 20px; background: linear-gradient(135deg, #ef4444, #dc2626); border-radius: 12px; color: white;';
+                streakBadge.innerHTML = `
+                    <div style="font-size: 2em;">🔥</div>
+                    <div style="font-weight: bold; font-size: 0.9em;">Streak Master</div>
+                    <div style="font-size: 0.8em; opacity: 0.9;">Earned!</div>
+                `;
+            }
+        }
+
+        // Utility functions
+        function showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => {
+                notification.style.animation = 'slideInNotification 0.3s ease-out reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            showAllFoods();
+            updateDashboard();
+            updateInsights();
+            setCurrentDateTime();
+            setCurrentDateTimeWeight();
+            
+            // Add event listeners for real-time sugar preview
+            const sugarInput = document.getElementById('customSugar');
+            const carbsInput = document.getElementById('customCarbs');
+            const servingsInput = document.getElementById('customServingsToEat');
+            
+            if (sugarInput) sugarInput.addEventListener('input', updateSugarPreview);
+            if (carbsInput) carbsInput.addEventListener('input', updateSugarPreview);
+            if (servingsInput) servingsInput.addEventListener('input', updateSugarPreview);
+            
+            // Initialize preview
+            updateSugarPreview();
+            
+            // Show welcome message
+            setTimeout(() => {
+                showNotification('🕵️ Welcome to MySugarPal! Start by logging a food to discover the complete sugar truth.');
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
+            
+                    
